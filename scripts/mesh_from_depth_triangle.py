@@ -77,7 +77,7 @@ class triangle_mesh_from_depth:
                                             depthScale=1000.0)
         # Since we're exporting the mesh file as an .obj file type, vertex normals cannot be exported.
         # In order to avoid Open3D warnings, we can clear the vertex normals of our computed mesh:
-        mesh.triangle_normals = o3d.utility.Vector3dVector([])
+        # mesh.triangle_normals = o3d.utility.Vector3dVector([])
 
         self.save_mesh_as_obj(mesh=mesh, export_dir = self.__export_directory)
 
@@ -98,7 +98,7 @@ class triangle_mesh_from_depth:
         rospy.logdebug("Exporting mesh as .obj file")
         # Filename for .obj mesh file:
         obj_filename = os.path.join(export_dir, "workspace_mesh.obj")
-        o3d.io.write_triangle_mesh(obj_filename, mesh, 
+        o3d.t.io.write_triangle_mesh(obj_filename, mesh, 
                                     write_ascii = True, 
                                     write_vertex_normals = False) # can't be exported into .obj files anyways
         rospy.loginfo("Mesh file successfully exported.")
@@ -237,11 +237,14 @@ class triangle_mesh_from_depth:
         mesh.compute_vertex_normals()
         mesh.compute_triangle_normals()
 
+        tensor_mesh = o3d.t.geometry.TriangleMesh()
+        tensor_mesh.from_legacy(mesh)
+
         print("Triangle variable listed as 'indices' shape: {}".format(indices))
         print("UV Mapping list shape. Should be the same as above: {}".format(len(uv_mapping)))
         # Indeed uv_mapping has the same number of elements as "indices"
 
-        return mesh
+        return tensor_mesh
     
 
 
