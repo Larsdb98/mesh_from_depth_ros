@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+    <!-- Launching the triangle meshing from depth node -->
+    <node pkg="mesh_from_depth" type="mesh_from_depth_triangle.py" name="mesh_from_depth_triangle" output="screen">
+        <param name="~depth_image_topic" value="/wrist_camera/aligned_depth_to_color/image_raw" />
+        <param name="~depth_intrinsics" value="/wrist_camera/aligned_depth_to_color/camera_info" />
+        <param name="~rgb_image_topic" value="/wrist_camera/color/image_raw" />
+        <param name="~export_directory" value="$(find mesh_from_depth)/output_mesh" />
+        <param name="~export_success_topic" value="mesh_from_depth_success" />
+    </node>
+
+</launch>
