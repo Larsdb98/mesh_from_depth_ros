@@ -6,10 +6,10 @@ from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Bool
 import os
 import cv_bridge
-import cv2
 import numpy as np
 import open3d as o3d 
 import math
+import copy
 # from skimage.io import imread # this will be removed since we're using images coming from ROS messages
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
 
@@ -142,8 +142,8 @@ class triangle_mesh_from_depth:
         # if sun3d:
         #     depth_raw = np.bitwise_or(depth_raw>>3, depth_raw<<13)
 
-        depth_raw = depth_raw.astype('float32')
-        depth_raw /= depthScale
+        # depth_raw = depth_raw.astype('float32')
+        # depth_raw /= depthScale
 
         # logger.debug('Image dimensions:%s x %s', width, height)
         # logger.debug('Camera Matrix:%s', cameraMatrix)
@@ -178,9 +178,18 @@ class triangle_mesh_from_depth:
         pixel_coords = self._pixel_coord_np(depth.shape[1], depth.shape[0])
         cam_coords = K_inv @ pixel_coords * depth.flatten()
 
+        print("cam_coords dimensions: {}".format(cam_coords.shape))
+
         indices = o3d.utility.Vector3iVector()
         w = camera.width
         h = camera.height
+        
+        # The following few lines are experimmental, trying to figure out how to map
+        # the indices (or triangle vertex-indices) to a corresponding UV coordinate.
+        # This might make me figure out how the hell I can create a texture file (png)
+        # to texture this mesh with a separate texture file with the Vulkan rendering engine.
+        uv_mapping = []
+
 
         with tqdm(total=(h-1)*(w-1)) as pbar:
             for i in range(0, h-1):
@@ -201,6 +210,7 @@ class triangle_mesh_from_depth:
                     angle = math.degrees(math.asin(abs(np.dot(n, u))))
                     if angle > minAngle:
                         indices.append([w*i+j, w*(i+1)+j, w*i+(j+1)])
+                        uv_mapping.append([i, j]) # Lars: added this for the uv mapping
 
                     verts = [
                         cam_coords[:, w*i+(j+1)],
@@ -218,6 +228,7 @@ class triangle_mesh_from_depth:
                     angle = math.degrees(math.asin(abs(np.dot(n, u))))
                     if angle > minAngle:
                         indices.append([w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)])
+                        uv_mapping.append([i, j]) # Lars: added this for the uv mapping
                     pbar.update(1)
 
         points = o3d.utility.Vector3dVector(cam_coords.transpose())
@@ -225,6 +236,10 @@ class triangle_mesh_from_depth:
         mesh = o3d.geometry.TriangleMesh(points, indices)
         mesh.compute_vertex_normals()
         mesh.compute_triangle_normals()
+
+        print("Triangle variable listed as 'indices' shape: {}".format(indices))
+        print("UV Mapping list shape. Should be the same as above: {}".format(len(uv_mapping)))
+        # Indeed uv_mapping has the same number of elements as "indices"
 
         return mesh
     
