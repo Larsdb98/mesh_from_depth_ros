@@ -13,7 +13,7 @@ import math
 # from skimage.io import imread # this will be removed since we're using images coming from ROS messages
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
 
-# NOTE: This script was massively inspired by the following github repo:
+# NOTE: This script used the following repo to compute the mesh from depth images:
 # https://github.com/hesom/depth_to_mesh/tree/master
 # This node allows us to create a triangle mesh from depth image messages from ROS
 
