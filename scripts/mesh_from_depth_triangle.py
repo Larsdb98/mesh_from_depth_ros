@@ -10,6 +10,7 @@ import numpy as np
 import open3d as o3d 
 import math
 import copy
+import tf
 # from skimage.io import imread # this will be removed since we're using images coming from ROS messages
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
 
@@ -22,6 +23,7 @@ class triangle_mesh_from_depth:
     def __init__(self):
         rospy.init_node('triangle_mesh_from_depth', anonymous = True)
         self.bridge = cv_bridge.CvBridge()
+        self.tf_listener = tf.TransformListener()
         
         # Placeholder for variables for camera intrinsics
         self.depth_camera_intrinsics = None
@@ -30,6 +32,10 @@ class triangle_mesh_from_depth:
         self.depth_image_header = None
         self.rgb_image = None
         self.rgb_image_header = None
+
+        # Placeholder for tf recorded when depth image was acquired
+        self.tf_translation = None
+        self.tf_rotation = None
 
         # default camera intrinsics: 
         # These are the default camera intrinsics for the Intel Realsense D435 
@@ -47,6 +53,9 @@ class triangle_mesh_from_depth:
         self.__rgb_image_topic = rospy.get_param("~rgb_image_topic", "/wrist_camera/color/image_raw")
         self.__export_directory = rospy.get_param("~export_directory", "/home/lars/Master_Thesis_workspaces/VIS4ROB_Vulkan_Glasses/catkin_ws/src/mapping_pipeline_packages/mesh_from_depth/output_mesh")
         self.__export_success_topic = rospy.get_param("~export_success_topic", "mesh_from_depth_success")
+        
+        self.__camera_frame_id = rospy.get_param("~camera_frame_id", "wrist_camera_color_optical_frame")
+        self.__target_frame_id = rospy.get_param("~target_frame_id", "world")
 
         # Setting up subscribers
         rospy.Subscriber(self.__depth_image_topic, Image, self.depth_image_callback)
@@ -59,7 +68,21 @@ class triangle_mesh_from_depth:
 
     # The depth callback is essentially the highlevel method here.
     def depth_image_callback(self, img_msg):
+
+        try:
+            # Get the transform fro the depth frame to world
+            (trans, rot) = self.tf_listener.lookupTransform(self.__target_frame_id, self.__camera_frame_id, rospy.Time(0))
+            # Create a 3x3 rotation matrix from the transform
+            self.tf_rotation = np.array(self.tf_listener.fromTranslationRotation(trans, rot)[:3, :3])
+            self.tf_translation = np.array(trans)
+
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            rospy.logerr("Error looking up transform ! Ignoring depth frame... %s", str(e))
+            return
+        
+
         rospy.loginfo("depth image recieved ! Processing...")
+
         self.depth_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="passthrough")
         self.depth_image_header = img_msg.header
 
@@ -75,6 +98,23 @@ class triangle_mesh_from_depth:
                                             cameraMatrix = camera_matrix, 
                                             minAngle=3.0,
                                             depthScale=1000.0)
+        
+        # defining the origin
+        origin = np.array([0.0, 0.0, 0.0])
+
+        # TODO: 
+        # The following lines of code do not work because Open3D has an unbelievably shitty API.
+        # Check out the provided examples under the following link:
+        # https://www.open3d.org/docs/release/python_example/geometry/triangle_mesh/index.html
+        # Hopefully by implementing their functions for translation and rotation we'll be able
+        # to transform the mesh into world coordinates.
+
+        # Transform mesh to tagret frame
+        mesh.rotate( R = self.tf_rotation, center = origin)
+        mesh.translate(translation = self.tf_translation)
+
+
+
         # Since we're exporting the mesh file as an .obj file type, vertex normals cannot be exported.
         # In order to avoid Open3D warnings, we can clear the vertex normals of our computed mesh:
         # mesh.triangle_normals = o3d.utility.Vector3dVector([])

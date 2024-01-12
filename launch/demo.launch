@@ -8,6 +8,10 @@
         <param name="~rgb_image_topic" value="/wrist_camera/color/image_raw" />
         <param name="~export_directory" value="$(find mesh_from_depth)/output_mesh" />
         <param name="~export_success_topic" value="mesh_from_depth_success" />
+
+        <!-- Mesh transformation to coordinate frame -->
+        <param name="~camera_frame_id" value="wrist_camera_color_optical_frame" /> <!-- From -->
+        <param name="~target_frame_id" value="world" /> <!-- To -->
     </node>
 
 </launch>
