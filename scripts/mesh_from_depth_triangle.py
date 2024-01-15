@@ -70,7 +70,6 @@ class triangle_mesh_from_depth:
 
     # The depth callback is essentially the highlevel method here.
     def depth_image_callback(self, img_msg):
-
         try:
             # Get the transform fro the depth frame to world
             (trans, rot) = self.tf_listener.lookupTransform(self.__target_frame_id, self.__camera_frame_id, rospy.Time(0))
@@ -108,23 +107,6 @@ class triangle_mesh_from_depth:
                                             translation=self.tf_translation)
         
         # print("DEBUG PRE mesh object: {}".format(mesh))
-
-        # defining the origin
-        # origin = np.array([0.0, 0.0, 0.0])
-        # origin_tensor = o3d.core.Tensor(origin)
-        # Convert to Open3D's weird datatypes
-        # tf_rotation_tensor = o3d.core.Tensor(self.tf_rotation)
-        # tf_translate_tensor = o3d.core.Tensor(self.tf_translation)
-        # Debug:
-        # print("tf_rotation Tensor: {}".format(tf_rotation_tensor))
-        # print("tf_translate Tensor: {}".format(tf_translate_tensor))
-        # Transform mesh to tagret frame
-        # mesh.create_coordinate_frame()
-        # mesh.rotate( R = tf_rotation_tensor, center = origin_tensor)
-        # mesh.translate(translation = tf_translate_tensor)
-        # Since we're exporting the mesh file as an .obj file type, vertex normals cannot be exported.
-        # In order to avoid Open3D warnings, we can clear the vertex normals of our computed mesh:
-        # mesh.triangle_normals = o3d.utility.Vector3dVector([])
 
         self.save_mesh_as_obj(mesh=mesh, export_dir = self.__export_directory)
 
@@ -229,10 +211,23 @@ class triangle_mesh_from_depth:
 
         # print("cam_coords dimensions: {}".format(cam_coords.shape))
 
-        # TRANSFORM VERTICES ACCORDING TO TF COMPUTED BY DEPTH CALLBACK 
-        print("rotation matrix: {}".format(rotation_matrix))
+        rospy.logdebug("rotation matrix: {}".format(rotation_matrix))
         print("cam_coords: {}".format(cam_coords[:, 0:10]))
-        cam_coords = (rotation_matrix @ cam_coords)
+
+        # Rotate points based on TF information
+        cam_coords = rotation_matrix @ cam_coords
+
+        # Translate points based on TF information
+
+        print("cam_coords dimensions: {}".format(cam_coords.shape))
+        print("cam_coords[0, :] dimensions: {}".format(cam_coords[0, :].shape))
+        print("np.ones_like(cam_coords): {}".format(np.ones_like(cam_coords).shape))
+
+        # cam_coords[0, :] = cam_coords[0, :] + translation[0] * np.ones_like(cam_coords[0, :])
+        # cam_coords[1, :] = cam_coords[1, :] + translation[1] * np.ones_like(cam_coords[1, :])
+        # cam_coords[2, :] = cam_coords[2, :] + translation[2] * np.ones_like(cam_coords[2, :])
+
+
         print("cam_coords: {}".format(cam_coords[:, 0:10]))
         # print("SHAPE OF CAM_COORDS: {}".format(cam_coords.shape))
 
@@ -289,16 +284,11 @@ class triangle_mesh_from_depth:
 
         points_np = cam_coords.transpose()
         indices_np = np.array(indices)
+
         # points = o3d.utility.Vector3dVector(cam_coords.transpose())
 
         # print("DEBUG: points: {}".format(points))
         # print("DEBUG: indices: {}".format(indices))
-
-        # mesh = o3d.geometry.TriangleMesh(points, indices)
-        # mesh.compute_vertex_normals()
-        # mesh.compute_triangle_normals()
-
-
 
         device  = o3d.core.Device("CPU:0")
         dtype_f = o3d.core.float32
@@ -317,10 +307,6 @@ class triangle_mesh_from_depth:
         tensor_mesh.triangle.indices = tensor_triangle_indices
 
         # print("TENSOR TRIANGLEMESH DEBUG: {}".format(tensor_mesh))
-
-        # print("Triangle variable listed as 'indices' shape: {}".format(indices))
-        # print("UV Mapping list shape. Should be the same as above: {}".format(len(uv_mapping)))
-        # Indeed uv_mapping has the same number of elements as "indices"
 
         return tensor_mesh
     
