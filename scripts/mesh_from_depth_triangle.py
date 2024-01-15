@@ -54,6 +54,8 @@ class triangle_mesh_from_depth:
         self.__export_directory = rospy.get_param("~export_directory", "/home/lars/Master_Thesis_workspaces/VIS4ROB_Vulkan_Glasses/catkin_ws/src/mapping_pipeline_packages/mesh_from_depth/output_mesh")
         self.__export_success_topic = rospy.get_param("~export_success_topic", "mesh_from_depth_success")
         
+        self.__depth_scale = rospy.get_param("~depth_scale", 1000.0)
+        
         self.__camera_frame_id = rospy.get_param("~camera_frame_id", "wrist_camera_color_optical_frame")
         self.__target_frame_id = rospy.get_param("~target_frame_id", "world")
 
@@ -101,38 +103,25 @@ class triangle_mesh_from_depth:
         mesh = self.depth_image_to_mesh(self.depth_image, 
                                             cameraMatrix = camera_matrix, 
                                             minAngle=3.0,
-                                            depthScale=1000.0, 
+                                            depthScale=self.__depth_scale, 
                                             rotation_matrix=self.tf_rotation,
                                             translation=self.tf_translation)
         
-        print("DEBUG PRE mesh object: {}".format(mesh))
+        # print("DEBUG PRE mesh object: {}".format(mesh))
 
         # defining the origin
-        origin = np.array([0.0, 0.0, 0.0])
-        origin_tensor = o3d.core.Tensor(origin)
-
-        # TODO: 
-        # The following lines of code do not work because Open3D has an unbelievably shitty API.
-        # Check out the provided examples under the following link:
-        # https://www.open3d.org/docs/release/python_example/geometry/triangle_mesh/index.html
-        # Hopefully by implementing their functions for translation and rotation we'll be able
-        # to transform the mesh into world coordinates.
-
+        # origin = np.array([0.0, 0.0, 0.0])
+        # origin_tensor = o3d.core.Tensor(origin)
         # Convert to Open3D's weird datatypes
-        tf_rotation_tensor = o3d.core.Tensor(self.tf_rotation)
-        tf_translate_tensor = o3d.core.Tensor(self.tf_translation)
-
+        # tf_rotation_tensor = o3d.core.Tensor(self.tf_rotation)
+        # tf_translate_tensor = o3d.core.Tensor(self.tf_translation)
         # Debug:
-        print("tf_rotation Tensor: {}".format(tf_rotation_tensor))
-        print("tf_translate Tensor: {}".format(tf_translate_tensor))
-
-
-
+        # print("tf_rotation Tensor: {}".format(tf_rotation_tensor))
+        # print("tf_translate Tensor: {}".format(tf_translate_tensor))
         # Transform mesh to tagret frame
         # mesh.create_coordinate_frame()
         # mesh.rotate( R = tf_rotation_tensor, center = origin_tensor)
         # mesh.translate(translation = tf_translate_tensor)
-
         # Since we're exporting the mesh file as an .obj file type, vertex normals cannot be exported.
         # In order to avoid Open3D warnings, we can clear the vertex normals of our computed mesh:
         # mesh.triangle_normals = o3d.utility.Vector3dVector([])
@@ -193,15 +182,14 @@ class triangle_mesh_from_depth:
 
 
 
-        depth_raw = image # transfer depth image to "depth_raw" variable.
+        depth_raw = copy.copy(image) # transfer depth image to "depth_raw" variable.
         width = depth_raw.shape[1]
         height = depth_raw.shape[0]
 
         # if sun3d:
         #     depth_raw = np.bitwise_or(depth_raw>>3, depth_raw<<13)
-
-        # depth_raw = depth_raw.astype('float32')
-        # depth_raw /= depthScale
+        depth_raw = depth_raw.astype('float32')
+        depth_raw /= depthScale
 
         # logger.debug('Image dimensions:%s x %s', width, height)
         # logger.debug('Camera Matrix:%s', cameraMatrix)
@@ -301,14 +289,14 @@ class triangle_mesh_from_depth:
 
         points_np = cam_coords.transpose()
         indices_np = np.array(indices)
-        points = o3d.utility.Vector3dVector(cam_coords.transpose())
+        # points = o3d.utility.Vector3dVector(cam_coords.transpose())
 
         # print("DEBUG: points: {}".format(points))
         # print("DEBUG: indices: {}".format(indices))
 
-        mesh = o3d.geometry.TriangleMesh(points, indices)
-        mesh.compute_vertex_normals()
-        mesh.compute_triangle_normals()
+        # mesh = o3d.geometry.TriangleMesh(points, indices)
+        # mesh.compute_vertex_normals()
+        # mesh.compute_triangle_normals()
 
 
 
@@ -344,7 +332,8 @@ class triangle_mesh_from_depth:
         rospy.spin()
 
 
-###########################################################3
+###########################################################
+###########################################################
 def main():
     node = triangle_mesh_from_depth()
     node.run()

@@ -8,6 +8,9 @@
         <param name="~rgb_image_topic" value="/wrist_camera/color/image_raw" />
         <param name="~export_directory" value="$(find mesh_from_depth)/output_mesh" />
         <param name="~export_success_topic" value="mesh_from_depth_success" />
+        
+        <!-- Depth metric adjustment -->
+        <param name="~depth_scale" value="1000.0" />
 
         <!-- Mesh transformation to coordinate frame -->
         <param name="~camera_frame_id" value="wrist_camera_color_optical_frame" /> <!-- From -->
