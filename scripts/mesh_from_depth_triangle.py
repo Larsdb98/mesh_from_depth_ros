@@ -6,6 +6,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Bool
 import os
 import cv_bridge
+# import cv2
 import numpy as np
 import open3d as o3d 
 import math
@@ -261,7 +262,10 @@ class triangle_mesh_from_depth:
                     angle = math.degrees(math.asin(abs(np.dot(n, u))))
                     if angle > minAngle:
                         indices.append([w*i+j, w*(i+1)+j, w*i+(j+1)])
-                        uv_mapping.append([i, j]) # Lars: added this for the uv mapping
+
+                        u = float(i)/h
+                        v = float(j)/w
+                        uv_mapping.append([u, v]) # Lars: added this for the uv mapping
 
                     verts = [
                         cam_coords[:, w*i+(j+1)],
@@ -279,7 +283,10 @@ class triangle_mesh_from_depth:
                     angle = math.degrees(math.asin(abs(np.dot(n, u))))
                     if angle > minAngle:
                         indices.append([w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)])
-                        uv_mapping.append([i, j]) # Lars: added this for the uv mapping
+                        
+                        u = float(i)/h
+                        v = float(j)/w
+                        uv_mapping.append([u, v]) # Lars: added this for the uv mapping
                     pbar.update(1)
 
         points_np = cam_coords.transpose()
