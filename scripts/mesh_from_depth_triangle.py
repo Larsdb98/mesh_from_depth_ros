@@ -79,8 +79,8 @@ class triangle_mesh_from_depth:
             self.tf_rotation = np.array(self.tf_listener.fromTranslationRotation(trans, rot)[:3, :3])
             self.tf_translation = np.array(trans)
 
-            print("tf_rotation matrix: {}".format(self.tf_rotation))
-            print("tf_translation: {}".format(self.tf_translation))
+            # print("tf_rotation matrix: {}".format(self.tf_rotation))
+            # print("tf_translation: {}".format(self.tf_translation))
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
             rospy.logerr("Error looking up transform ! Ignoring depth frame... %s", str(e))
@@ -128,7 +128,7 @@ class triangle_mesh_from_depth:
         rospy.logdebug("Exporting mesh as .obj file")
         # Filename for .obj mesh file:
         obj_filename = os.path.join(export_dir, "workspace_mesh.obj")
-        o3d.t.io.write_triangle_mesh(obj_filename, mesh, 
+        o3d.io.write_triangle_mesh(obj_filename, mesh, 
                                     write_ascii = True, 
                                     write_vertex_normals = False) # can't be exported into .obj files anyways
         rospy.loginfo("Mesh file successfully exported.")
@@ -213,23 +213,23 @@ class triangle_mesh_from_depth:
         # print("cam_coords dimensions: {}".format(cam_coords.shape))
 
         rospy.logdebug("rotation matrix: {}".format(rotation_matrix))
-        print("cam_coords: {}".format(cam_coords[:, 0:10]))
+        # print("cam_coords: {}".format(cam_coords[:, 0:10]))
 
         # Rotate points based on TF information
         cam_coords = rotation_matrix @ cam_coords
 
         # Translate points based on TF information
 
-        print("cam_coords dimensions: {}".format(cam_coords.shape))
-        print("cam_coords[0, :] dimensions: {}".format(cam_coords[0, :].shape))
-        print("np.ones_like(cam_coords): {}".format(np.ones_like(cam_coords).shape))
+        # print("cam_coords dimensions: {}".format(cam_coords.shape))
+        # print("cam_coords[0, :] dimensions: {}".format(cam_coords[0, :].shape))
+        # print("np.ones_like(cam_coords): {}".format(np.ones_like(cam_coords).shape))
 
         # cam_coords[0, :] = cam_coords[0, :] + translation[0] * np.ones_like(cam_coords[0, :])
         # cam_coords[1, :] = cam_coords[1, :] + translation[1] * np.ones_like(cam_coords[1, :])
         # cam_coords[2, :] = cam_coords[2, :] + translation[2] * np.ones_like(cam_coords[2, :])
 
 
-        print("cam_coords: {}".format(cam_coords[:, 0:10]))
+        # print("cam_coords: {}".format(cam_coords[:, 0:10]))
         # print("SHAPE OF CAM_COORDS: {}".format(cam_coords.shape))
 
         indices = o3d.utility.Vector3iVector()
@@ -240,6 +240,10 @@ class triangle_mesh_from_depth:
         # the indices (or triangle vertex-indices) to a corresponding UV coordinate.
         # This might make me figure out how the hell I can create a texture file (png)
         # to texture this mesh with a separate texture file with the Vulkan rendering engine.
+        # 
+        # It's important to point out that mesh.triangle_uvs expects an array of normalized UV coords
+        # defined between [0, 1] and has a dimension of (3 * num_triangles, 2). Each vertex that forms
+        # the triangles need to be appended to the list below:
         uv_mapping = []
 
 
@@ -263,9 +267,15 @@ class triangle_mesh_from_depth:
                     if angle > minAngle:
                         indices.append([w*i+j, w*(i+1)+j, w*i+(j+1)])
 
-                        u = float(i)/h
-                        v = float(j)/w
-                        uv_mapping.append([u, v]) # Lars: added this for the uv mapping
+                        u1 = float(i)/h
+                        v1 = float(j)/w
+                        u2 = float(i+1)/h
+                        v2 = float(j)/w
+                        u3 = float(i)/h
+                        v3 = float(j+1)/w
+                        uv_mapping.append([u1, v1]) # Lars: added this for the uv mapping
+                        uv_mapping.append([u2, v2])
+                        uv_mapping.append([u3, v3])
 
                     verts = [
                         cam_coords[:, w*i+(j+1)],
@@ -284,38 +294,66 @@ class triangle_mesh_from_depth:
                     if angle > minAngle:
                         indices.append([w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)])
                         
-                        u = float(i)/h
-                        v = float(j)/w
-                        uv_mapping.append([u, v]) # Lars: added this for the uv mapping
+                        u1 = float(i)/h
+                        v1 = float(j+1)/w
+                        u2 = float(i+1)/h
+                        v2 = float(j)/w
+                        u3 = float(i+1)/h
+                        v3 = float(j+1)/w
+                        uv_mapping.append([u1, v1]) # Lars: added this for the uv mapping
+                        uv_mapping.append([u2, v2])
+                        uv_mapping.append([u3, v3])
                     pbar.update(1)
+
+        uv_mapping_np = np.array(uv_mapping)
 
         points_np = cam_coords.transpose()
         indices_np = np.array(indices)
 
+        points = o3d.utility.Vector3dVector(cam_coords.transpose())
+
+        triangle_uv_vector = o3d.utility.Vector2dVector(uv_mapping_np)
+
+        mesh = o3d.geometry.TriangleMesh(points, indices)
+
+        triangle_uv = mesh.triangle_uvs
+
+        print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
+
+        mesh.triangle_uvs = triangle_uv_vector
+
+        triangle_uv = mesh.triangle_uvs
+
+        print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
+
+        print("")
+
         # points = o3d.utility.Vector3dVector(cam_coords.transpose())
+
+        print("Mesh debug: {}".format(mesh))
 
         # print("DEBUG: points: {}".format(points))
         # print("DEBUG: indices: {}".format(indices))
 
-        device  = o3d.core.Device("CPU:0")
-        dtype_f = o3d.core.float32
-        dtype_i = o3d.core.int32
+        # device  = o3d.core.Device("CPU:0")
+        # dtype_f = o3d.core.float32
+        # dtype_i = o3d.core.int32
 
-        tensor_points = o3d.core.Tensor(points_np, dtype_f, device)
-        tensor_triangle_indices = o3d.core.Tensor(indices_np, dtype_i, device)
+        # tensor_points = o3d.core.Tensor(points_np, dtype_f, device)
+        # tensor_triangle_indices = o3d.core.Tensor(indices_np, dtype_i, device)
 
         # print("Tensor_points: {}".format(tensor_points))
         # print("Tensor_triangles: {}".format(tensor_triangle))
 
         # print("MESH CREATE DEBUG: {}".format(mesh))
 
-        tensor_mesh = o3d.t.geometry.TriangleMesh(device)
-        tensor_mesh.vertex.positions = tensor_points
-        tensor_mesh.triangle.indices = tensor_triangle_indices
+        # tensor_mesh = o3d.t.geometry.TriangleMesh(device)
+        # tensor_mesh.vertex.positions = tensor_points
+        # tensor_mesh.triangle.indices = tensor_triangle_indices
 
         # print("TENSOR TRIANGLEMESH DEBUG: {}".format(tensor_mesh))
 
-        return tensor_mesh
+        return mesh # tensor_mesh
     
 
 
