@@ -6,7 +6,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Bool
 import os
 import cv_bridge
-# import cv2
+import cv2
 import numpy as np
 import open3d as o3d 
 import math
@@ -86,7 +86,7 @@ class triangle_mesh_from_depth:
             tf_rot = self.tf_rotation
             tf_trans = self.tf_translation
 
-            self.create_4ch_texture(mask_image = semantic_image, rgb_image=rgb_img)
+            self.create_4ch_texture(mask_image = semantic_image, rgb_image=rgb_img, export_dir=self.__export_directory)
             self.trigger_meshing(depth_image=depth_img,
                                 tf_rotation=tf_rot,
                                 tf_translation=tf_trans)
@@ -98,6 +98,7 @@ class triangle_mesh_from_depth:
 
 
     def depth_image_callback_2(self,img_msg):
+        # First, immediately catch the current transformation and store it. Then convert and save the recieved depth image.
         try:
             (trans, rot) = self.tf_listener.lookupTransform(self.__target_frame_id, self.__camera_frame_id, rospy.Time(0))
             self.tf_rotation = np.array(self.tf_listener.fromTranslationRotation(trans, rot)[:3, :3])
@@ -154,6 +155,18 @@ class triangle_mesh_from_depth:
 
 
 
+    def depth_intrinsics_callback(self, intrinsics_msg):
+        self.depth_camera_intrinsics = np.array(intrinsics_msg.K).reshape((3, 3))
+
+
+
+    def rgb_image_callback(self, img_msg):
+        self.rgb_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+        self.rgb_image_header = img_msg.header
+
+
+
+
     def trigger_meshing(self, depth_image, tf_rotation, tf_translation):
         camera_matrix = self.DEFAULT_CAMERA
 
@@ -176,16 +189,6 @@ class triangle_mesh_from_depth:
 
 
 
-
-    def depth_intrinsics_callback(self, intrinsics_msg):
-        self.depth_camera_intrinsics = np.array(intrinsics_msg.K).reshape((3, 3))
-
-
-    def rgb_image_callback(self, img_msg):
-        self.rgb_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
-        self.rgb_image_header = img_msg.header
-
-
     def save_mesh_as_obj(self, mesh, export_dir):
         rospy.logdebug("Exporting mesh as .obj file")
         # Filename for .obj mesh file:
@@ -197,12 +200,26 @@ class triangle_mesh_from_depth:
 
 
 
-    def create_4ch_texture(self, mask_image, rgb_image):
-        print("RGB_image shape: {}".format(rgb_image.shape))
-        print("Semantic image shape: {}".format(mask_image.shape))
-        rgbs_image = np.array((rgb_image.shape[0], rgb_image.shape[1], rgb_image.shape[2] + 1)) # +1 for alpha channel
+    def create_4ch_texture(self, mask_image, rgb_image, export_dir):
+        rgbs_image = np.zeros((rgb_image.shape[0], rgb_image.shape[1], rgb_image.shape[2] + 1)) # +1 for alpha channel
+        
+        # print("RGBS image shape: {}".format(rgbs_image.shape))
 
+        # Dump rgb image into rgbs image
+        rgbs_image[:, :, :3] = rgb_image
 
+        # Convert mask image from rgb to grayscale:
+        gray_mask = cv2.cvtColor(mask_image, cv2.COLOR_BGR2GRAY)
+        # print("Gray mask image shape: {}".format(gray_mask.shape))
+
+        # Dump grayscale mask in rgbs image
+        rgbs_image[:, :, 3] = gray_mask
+
+        # Export rgbs (4 channel) image into png file.
+        rgbs_filename = os.path.join(export_dir, "workspace_texture.png")
+
+        cv2.imwrite(rgbs_filename, rgbs_image)
+        rospy.loginfo("RGBS texture file successfully exported.")
 
 
 
