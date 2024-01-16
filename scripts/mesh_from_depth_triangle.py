@@ -316,42 +316,22 @@ class triangle_mesh_from_depth:
 
         mesh = o3d.geometry.TriangleMesh(points, indices)
 
-        triangle_uv = mesh.triangle_uvs
+        # triangle_uv = mesh.triangle_uvs
 
-        print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
+        # print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
 
         mesh.triangle_uvs = triangle_uv_vector
 
-        triangle_uv = mesh.triangle_uvs
+        # triangle_uv = mesh.triangle_uvs
 
-        print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
+        # print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
 
         print("")
 
         # points = o3d.utility.Vector3dVector(cam_coords.transpose())
 
-        print("Mesh debug: {}".format(mesh))
+        # print("Mesh debug: {}".format(mesh))
 
-        # print("DEBUG: points: {}".format(points))
-        # print("DEBUG: indices: {}".format(indices))
-
-        # device  = o3d.core.Device("CPU:0")
-        # dtype_f = o3d.core.float32
-        # dtype_i = o3d.core.int32
-
-        # tensor_points = o3d.core.Tensor(points_np, dtype_f, device)
-        # tensor_triangle_indices = o3d.core.Tensor(indices_np, dtype_i, device)
-
-        # print("Tensor_points: {}".format(tensor_points))
-        # print("Tensor_triangles: {}".format(tensor_triangle))
-
-        # print("MESH CREATE DEBUG: {}".format(mesh))
-
-        # tensor_mesh = o3d.t.geometry.TriangleMesh(device)
-        # tensor_mesh.vertex.positions = tensor_points
-        # tensor_mesh.triangle.indices = tensor_triangle_indices
-
-        # print("TENSOR TRIANGLEMESH DEBUG: {}".format(tensor_mesh))
 
         return mesh # tensor_mesh
     
