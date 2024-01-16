@@ -80,6 +80,7 @@ class triangle_mesh_from_depth:
         self.semantic_image_header = img_msg.header
         self.semantic_image = semantic_image
         if self.depth_image is not None and self.rgb_image is not None and self.tf_rotation is not None and self.tf_translation is not None:
+            rospy.loginfo("depth image & semantics recieved ! Processing...")
             # Start the meshing process
             depth_img = self.depth_image
             rgb_img = self.rgb_image
