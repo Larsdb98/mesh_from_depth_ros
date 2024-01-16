@@ -33,6 +33,8 @@ class triangle_mesh_from_depth:
         self.depth_image_header = None
         self.rgb_image = None
         self.rgb_image_header = None
+        self.semantic_image = None 
+        self.semantic_image_header = None
 
         # Placeholder for tf recorded when depth image was acquired
         self.tf_translation = None
@@ -52,6 +54,7 @@ class triangle_mesh_from_depth:
         self.__depth_image_topic = rospy.get_param("~depth_image_topic", "/wrist_camera/aligned_depth_to_color/image_raw")
         self.__camera_intrinsics_topic = rospy.get_param("~depth_intrinsics", "/wrist_camera/aligned_depth_to_color/camera_info")
         self.__rgb_image_topic = rospy.get_param("~rgb_image_topic", "/wrist_camera/color/image_raw")
+        self.__semantic_image_topic = rospy.get_param("~semantic_image", "/color_picker/balloon_color_picker/circled_hsv")
         self.__export_directory = rospy.get_param("~export_directory", "/home/lars/Master_Thesis_workspaces/VIS4ROB_Vulkan_Glasses/catkin_ws/src/mapping_pipeline_packages/mesh_from_depth/output_mesh")
         self.__export_success_topic = rospy.get_param("~export_success_topic", "mesh_from_depth_success")
         
@@ -61,12 +64,52 @@ class triangle_mesh_from_depth:
         self.__target_frame_id = rospy.get_param("~target_frame_id", "world")
 
         # Setting up subscribers
-        rospy.Subscriber(self.__depth_image_topic, Image, self.depth_image_callback)
+        rospy.Subscriber(self.__depth_image_topic, Image, self.depth_image_callback_2)
         rospy.Subscriber(self.__camera_intrinsics_topic, CameraInfo, self.depth_intrinsics_callback)
         rospy.Subscriber(self.__rgb_image_topic, Image, self.rgb_image_callback)
+        rospy.Subscriber(self.__semantic_image_topic, Image, self.semantic_callback)
 
         # Setting up publishers: export flag
         self.export_success_pub = rospy.Publisher(self.__export_success_topic, Bool, queue_size=10)
+
+
+
+
+    def semantic_callback(self, img_msg):
+        semantic_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="passthrough")
+        self.semantic_image_header = img_msg.header
+        self.semantic_image = semantic_image
+        if self.depth_image is not None and self.rgb_image is not None and self.tf_rotation is not None and self.tf_translation is not None:
+            # Start the meshing process
+            depth_img = self.depth_image
+            rgb_img = self.rgb_image
+            tf_rot = self.tf_rotation
+            tf_trans = self.tf_translation
+
+            self.create_4ch_texture(mask_image = semantic_image, rgb_image=rgb_img)
+            self.trigger_meshing(depth_image=depth_img,
+                                tf_rotation=tf_rot,
+                                tf_translation=tf_trans)
+        else:
+            rospy.logwarn("Not enough data recieved yet ! Ignoring frame...")
+
+
+
+
+
+    def depth_image_callback_2(self,img_msg):
+        try:
+            (trans, rot) = self.tf_listener.lookupTransform(self.__target_frame_id, self.__camera_frame_id, rospy.Time(0))
+            self.tf_rotation = np.array(self.tf_listener.fromTranslationRotation(trans, rot)[:3, :3])
+            self.tf_translation = np.array(trans)
+            self.depth_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="passthrough")
+            self.depth_image_header = img_msg.header
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            rospy.logerr("Error looking up transform ! Ignoring depth frame... %s", str(e))
+            return
+        
+
+
 
 
     # The depth callback is essentially the highlevel method here.
@@ -99,19 +142,38 @@ class triangle_mesh_from_depth:
         else:
             camera_matrix = self.depth_camera_intrinsics
 
-
         mesh = self.depth_image_to_mesh(self.depth_image, 
                                             cameraMatrix = camera_matrix, 
                                             minAngle=3.0,
                                             depthScale=self.__depth_scale, 
                                             rotation_matrix=self.tf_rotation,
                                             translation=self.tf_translation)
+
+        self.save_mesh_as_obj(mesh=mesh, export_dir = self.__export_directory)
+
+
+
+
+    def trigger_meshing(self, depth_image, tf_rotation, tf_translation):
+        camera_matrix = self.DEFAULT_CAMERA
+
+        if self.depth_camera_intrinsics is None:
+            rospy.logwarn("Camera intrinsics not yet recieved ! Using default camera model...")
+        else:
+            camera_matrix = self.depth_camera_intrinsics
+
+
+        mesh = self.depth_image_to_mesh(depth_image, 
+                                            cameraMatrix = camera_matrix, 
+                                            minAngle=3.0,
+                                            depthScale=self.__depth_scale, 
+                                            rotation_matrix=tf_rotation,
+                                            translation=tf_translation)
         
         # print("DEBUG PRE mesh object: {}".format(mesh))
 
         self.save_mesh_as_obj(mesh=mesh, export_dir = self.__export_directory)
 
-        # print("Depth image shape: {}".format(self.depth_image.shape))
 
 
 
@@ -132,6 +194,19 @@ class triangle_mesh_from_depth:
                                     write_ascii = True, 
                                     write_vertex_normals = False) # can't be exported into .obj files anyways
         rospy.loginfo("Mesh file successfully exported.")
+
+
+
+    def create_4ch_texture(self, mask_image, rgb_image):
+        print("RGB_image shape: {}".format(rgb_image.shape))
+        print("Semantic image shape: {}".format(mask_image.shape))
+        rgbs_image = np.array((rgb_image.shape[0], rgb_image.shape[1], rgb_image.shape[2] + 1)) # +1 for alpha channel
+
+
+
+
+
+
 
 
     ########################################################################
@@ -218,17 +293,6 @@ class triangle_mesh_from_depth:
         # Rotate points based on TF information
         cam_coords = rotation_matrix @ cam_coords
 
-        # Translate points based on TF information
-
-        # print("cam_coords dimensions: {}".format(cam_coords.shape))
-        # print("cam_coords[0, :] dimensions: {}".format(cam_coords[0, :].shape))
-        # print("np.ones_like(cam_coords): {}".format(np.ones_like(cam_coords).shape))
-
-        # cam_coords[0, :] = cam_coords[0, :] + translation[0] * np.ones_like(cam_coords[0, :])
-        # cam_coords[1, :] = cam_coords[1, :] + translation[1] * np.ones_like(cam_coords[1, :])
-        # cam_coords[2, :] = cam_coords[2, :] + translation[2] * np.ones_like(cam_coords[2, :])
-
-
         # print("cam_coords: {}".format(cam_coords[:, 0:10]))
         # print("SHAPE OF CAM_COORDS: {}".format(cam_coords.shape))
 
@@ -236,11 +300,6 @@ class triangle_mesh_from_depth:
         w = camera.width
         h = camera.height
         
-        # The following few lines are experimmental, trying to figure out how to map
-        # the indices (or triangle vertex-indices) to a corresponding UV coordinate.
-        # This might make me figure out how the hell I can create a texture file (png)
-        # to texture this mesh with a separate texture file with the Vulkan rendering engine.
-        # 
         # It's important to point out that mesh.triangle_uvs expects an array of normalized UV coords
         # defined between [0, 1] and has a dimension of (3 * num_triangles, 2). Each vertex that forms
         # the triangles need to be appended to the list below:
@@ -267,13 +326,14 @@ class triangle_mesh_from_depth:
                     if angle > minAngle:
                         indices.append([w*i+j, w*(i+1)+j, w*i+(j+1)])
 
+                        # UV mapping
                         u1 = float(i)/h
                         v1 = float(j)/w
                         u2 = float(i+1)/h
                         v2 = float(j)/w
                         u3 = float(i)/h
                         v3 = float(j+1)/w
-                        uv_mapping.append([u1, v1]) # Lars: added this for the uv mapping
+                        uv_mapping.append([u1, v1]) 
                         uv_mapping.append([u2, v2])
                         uv_mapping.append([u3, v3])
 
@@ -294,44 +354,36 @@ class triangle_mesh_from_depth:
                     if angle > minAngle:
                         indices.append([w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)])
                         
+                        # UV mapping
                         u1 = float(i)/h
                         v1 = float(j+1)/w
                         u2 = float(i+1)/h
                         v2 = float(j)/w
                         u3 = float(i+1)/h
                         v3 = float(j+1)/w
-                        uv_mapping.append([u1, v1]) # Lars: added this for the uv mapping
+                        uv_mapping.append([u1, v1]) 
                         uv_mapping.append([u2, v2])
                         uv_mapping.append([u3, v3])
                     pbar.update(1)
 
         uv_mapping_np = np.array(uv_mapping)
 
-        points_np = cam_coords.transpose()
-        indices_np = np.array(indices)
+        # Translate points based on TF information
+
+        cam_coords[0, :] = cam_coords[0, :] + translation[0] * np.ones_like(cam_coords[0, :])
+        cam_coords[1, :] = cam_coords[1, :] + translation[1] * np.ones_like(cam_coords[1, :])
+        cam_coords[2, :] = cam_coords[2, :] + translation[2] * np.ones_like(cam_coords[2, :])
+
+
+        # points_np = cam_coords.transpose()
+        # indices_np = np.array(indices)
 
         points = o3d.utility.Vector3dVector(cam_coords.transpose())
-
         triangle_uv_vector = o3d.utility.Vector2dVector(uv_mapping_np)
-
         mesh = o3d.geometry.TriangleMesh(points, indices)
 
-        # triangle_uv = mesh.triangle_uvs
-
-        # print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
-
+        # Place UV map into mesh instance
         mesh.triangle_uvs = triangle_uv_vector
-
-        # triangle_uv = mesh.triangle_uvs
-
-        # print("Size of mesh.triangle_uvs before adding the uv coords: {}".format(triangle_uv))
-
-        print("")
-
-        # points = o3d.utility.Vector3dVector(cam_coords.transpose())
-
-        # print("Mesh debug: {}".format(mesh))
-
 
         return mesh # tensor_mesh
     

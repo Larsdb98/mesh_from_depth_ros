@@ -6,6 +6,7 @@
         <param name="~depth_image_topic" value="/wrist_camera/aligned_depth_to_color/image_raw" />
         <param name="~depth_intrinsics" value="/wrist_camera/aligned_depth_to_color/camera_info" />
         <param name="~rgb_image_topic" value="/wrist_camera/color/image_raw" />
+        <param name="~semantic_image" value="/color_picker/balloon_color_picker/circled_hsv" />
         <param name="~export_directory" value="$(find mesh_from_depth)/output_mesh" />
         <param name="~export_success_topic" value="mesh_from_depth_success" />
         
