@@ -345,22 +345,16 @@ class triangle_mesh_from_depth:
                         indices.append([w*i+j, w*(i+1)+j, w*i+(j+1)])
 
                         # UV mapping
-                        u1 = float(i)/h
-                        v1 = float(j)/w
-                        u2 = float(i+1)/h
-                        v2 = float(j)/w
-                        u3 = float(i)/h
-                        v3 = float(j+1)/w
-                        # uv_mapping.append([u1, v1]) 
-                        # uv_mapping.append([u2, v2])
-                        # uv_mapping.append([u3, v3])
-                        # So far textures are not mapped correctly. It would appear
-                        # that the U & V coords are swapped. Swapping them below:
-                        # This helped but it seems that the coords of the height are inversed
-                        # so we need to try to flip the i coords. 
-                        uv_mapping.append([v1, u1]) 
-                        uv_mapping.append([v2, u2])
-                        uv_mapping.append([v3, u3])
+                        v1 = float(h-i)/h
+                        u1 = float(j)/w
+                        v2 = float(h-(i+1))/h
+                        u2 = float(j)/w
+                        v3 = float(h-i)/h
+                        u3 = float(j+1)/w
+
+                        uv_mapping.append([u1, v1]) 
+                        uv_mapping.append([u2, v2])
+                        uv_mapping.append([u3, v3])
 
                     verts = [
                         cam_coords[:, w*i+(j+1)],
@@ -380,20 +374,17 @@ class triangle_mesh_from_depth:
                         indices.append([w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)])
                         
                         # UV mapping
-                        u1 = float(i)/h
-                        v1 = float(j+1)/w
-                        u2 = float(i+1)/h
-                        v2 = float(j)/w
-                        u3 = float(i+1)/h
-                        v3 = float(j+1)/w
-                        # uv_mapping.append([u1, v1]) 
-                        # uv_mapping.append([u2, v2])
-                        # uv_mapping.append([u3, v3])
+                        v1 = float(h-i)/h
+                        u1 = float(j+1)/w
+                        v2 = float(h-(i+1))/h
+                        u2 = float(j)/w
+                        v3 = float(h-(i+1))/h
+                        u3 = float(j+1)/w
 
                         # Swapping U & V coords
-                        uv_mapping.append([v1, u1]) 
-                        uv_mapping.append([v2, u2])
-                        uv_mapping.append([v3, u3])
+                        uv_mapping.append([u1, v1]) 
+                        uv_mapping.append([u2, v2])
+                        uv_mapping.append([u3, v3])
 
 
 
