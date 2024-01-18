@@ -351,9 +351,16 @@ class triangle_mesh_from_depth:
                         v2 = float(j)/w
                         u3 = float(i)/h
                         v3 = float(j+1)/w
-                        uv_mapping.append([u1, v1]) 
-                        uv_mapping.append([u2, v2])
-                        uv_mapping.append([u3, v3])
+                        # uv_mapping.append([u1, v1]) 
+                        # uv_mapping.append([u2, v2])
+                        # uv_mapping.append([u3, v3])
+                        # So far textures are not mapped correctly. It would appear
+                        # that the U & V coords are swapped. Swapping them below:
+                        # This helped but it seems that the coords of the height are inversed
+                        # so we need to try to flip the i coords. 
+                        uv_mapping.append([v1, u1]) 
+                        uv_mapping.append([v2, u2])
+                        uv_mapping.append([v3, u3])
 
                     verts = [
                         cam_coords[:, w*i+(j+1)],
@@ -379,9 +386,17 @@ class triangle_mesh_from_depth:
                         v2 = float(j)/w
                         u3 = float(i+1)/h
                         v3 = float(j+1)/w
-                        uv_mapping.append([u1, v1]) 
-                        uv_mapping.append([u2, v2])
-                        uv_mapping.append([u3, v3])
+                        # uv_mapping.append([u1, v1]) 
+                        # uv_mapping.append([u2, v2])
+                        # uv_mapping.append([u3, v3])
+
+                        # Swapping U & V coords
+                        uv_mapping.append([v1, u1]) 
+                        uv_mapping.append([v2, u2])
+                        uv_mapping.append([v3, u3])
+
+
+
                     pbar.update(1)
 
         uv_mapping_np = np.array(uv_mapping)
