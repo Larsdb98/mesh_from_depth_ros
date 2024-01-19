@@ -56,7 +56,7 @@ class triangle_mesh_from_depth:
         self.__rgb_image_topic = rospy.get_param("~rgb_image_topic", "/wrist_camera/color/image_raw")
         self.__semantic_image_topic = rospy.get_param("~semantic_image", "/color_picker/balloon_color_picker/circled_hsv")
         self.__export_directory = rospy.get_param("~export_directory", "/home/lars/Master_Thesis_workspaces/VIS4ROB_Vulkan_Glasses/catkin_ws/src/mapping_pipeline_packages/mesh_from_depth/output_mesh")
-        self.__export_success_topic = rospy.get_param("~export_success_topic", "mesh_from_depth_success")
+        self.__export_success_topic = rospy.get_param("~export_success_topic", "/mesh_from_depth_success")
         
         self.__depth_scale = rospy.get_param("~depth_scale", 1000.0)
         
@@ -87,7 +87,9 @@ class triangle_mesh_from_depth:
             tf_rot = self.tf_rotation
             tf_trans = self.tf_translation
 
-            self.create_4ch_texture(mask_image = semantic_image, rgb_image=rgb_img, export_dir=self.__export_directory)
+            self.create_4ch_texture(mask_image = semantic_image, 
+                                    rgb_image=rgb_img, 
+                                    export_dir=self.__export_directory)
             self.trigger_meshing(depth_image=depth_img,
                                 tf_rotation=tf_rot,
                                 tf_translation=tf_trans)
@@ -114,7 +116,7 @@ class triangle_mesh_from_depth:
 
 
 
-    # The depth callback is essentially the highlevel method here.
+    # The depth callback is essentially the highlevel method here. OUTDATED AND NOT USED
     def depth_image_callback(self, img_msg):
         try:
             # Get the transform fro the depth frame to world
@@ -156,6 +158,8 @@ class triangle_mesh_from_depth:
 
 
 
+
+
     def depth_intrinsics_callback(self, intrinsics_msg):
         self.depth_camera_intrinsics = np.array(intrinsics_msg.K).reshape((3, 3))
 
@@ -187,6 +191,8 @@ class triangle_mesh_from_depth:
         # print("DEBUG PRE mesh object: {}".format(mesh))
 
         self.save_mesh_as_obj(mesh=mesh, export_dir = self.__export_directory)
+        # HERE PUBLISH SUCCESS FLAG
+        self.publish_success_flag()
 
 
 
@@ -198,6 +204,12 @@ class triangle_mesh_from_depth:
                                     write_ascii = True, 
                                     write_vertex_normals = False) # can't be exported into .obj files anyways
         rospy.loginfo("Mesh file successfully exported.")
+
+
+    def publish_success_flag(self):
+        msg = Bool()
+        msg.data = True
+        self.export_success_pub.publish(msg)
 
 
 
@@ -334,13 +346,14 @@ class triangle_mesh_from_depth:
                     ]
                     if [0,0,0] in map(list, verts):
                         continue
-                    v1 = verts[0] - verts[1]
-                    v2 = verts[0] - verts[2]
-                    n = np.cross(v1, v2)
-                    n /= np.linalg.norm(n)
-                    center = (verts[0] + verts[1] + verts[2]) / 3.0
-                    u = center / np.linalg.norm(center)
-                    angle = math.degrees(math.asin(abs(np.dot(n, u))))
+                    # v1 = verts[0] - verts[1]
+                    # v2 = verts[0] - verts[2]
+                    # n = np.cross(v1, v2)
+                    # n /= np.linalg.norm(n)
+                    # center = (verts[0] + verts[1] + verts[2]) / 3.0
+                    # u = center / np.linalg.norm(center)
+                    # angle = math.degrees(math.asin(abs(np.dot(n, u))))
+                    angle = 3.5
                     if angle > minAngle:
                         indices.append([w*i+j, w*(i+1)+j, w*i+(j+1)])
 
@@ -363,13 +376,20 @@ class triangle_mesh_from_depth:
                     ]
                     if [0,0,0] in map(list, verts):
                         continue
-                    v1 = verts[0] - verts[1]
-                    v2 = verts[0] - verts[2]
-                    n = np.cross(v1, v2)
-                    n /= np.linalg.norm(n)
-                    center = (verts[0] + verts[1] + verts[2]) / 3.0
-                    u = center / np.linalg.norm(center)
-                    angle = math.degrees(math.asin(abs(np.dot(n, u))))
+
+                    # Trying out speeding up the code by getting rid of these 
+                    # computationally expensive lines of code.
+                    # Let's assume that all vertices shall be connected to triangles.
+                    # Might create artifacts on the actual mesh.
+
+                    # v1 = verts[0] - verts[1]
+                    # v2 = verts[0] - verts[2]
+                    # n = np.cross(v1, v2)
+                    # n /= np.linalg.norm(n)
+                    # center = (verts[0] + verts[1] + verts[2]) / 3.0
+                    # u = center / np.linalg.norm(center)
+                    # angle = math.degrees(math.asin(abs(np.dot(n, u))))
+                    angle = 3.5
                     if angle > minAngle:
                         indices.append([w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)])
                         
@@ -387,7 +407,6 @@ class triangle_mesh_from_depth:
                         uv_mapping.append([u3, v3])
 
 
-
                     pbar.update(1)
 
         uv_mapping_np = np.array(uv_mapping)
@@ -397,7 +416,6 @@ class triangle_mesh_from_depth:
         cam_coords[0, :] = cam_coords[0, :] + translation[0] * np.ones_like(cam_coords[0, :])
         cam_coords[1, :] = cam_coords[1, :] + translation[1] * np.ones_like(cam_coords[1, :])
         cam_coords[2, :] = cam_coords[2, :] + translation[2] * np.ones_like(cam_coords[2, :])
-
 
         # points_np = cam_coords.transpose()
         # indices_np = np.array(indices)
