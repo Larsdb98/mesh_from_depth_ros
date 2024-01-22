@@ -12,12 +12,95 @@ import open3d as o3d
 import math
 import copy
 import tf
-# from skimage.io import imread # this will be removed since we're using images coming from ROS messages
+from numba import jit
+import datetime
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
 
 # NOTE: This script used the following repo to compute the mesh from depth images:
 # https://github.com/hesom/depth_to_mesh/tree/master
 # This node allows us to create a triangle mesh from depth image messages from ROS
+
+
+# We can try to use Numba to precompile the method and maybe accelerate meshing time:
+@jit(nopython=True)
+def depth_to_mesh_core(cam_coords, dimensions, minAngle = 3.0):
+    # PARAMETERS OF THIS METHOD MUST BE DECLARED BEFOREHAND
+    # Initialize numpy arrays for memory allocation
+    # dimensions = [h, w]
+
+    h = dimensions[0]
+    w = dimensions[1]
+
+    # Array indices declaration for the allocated numpy arrays
+    append_indices_id = 0
+    append_uv_id = 0
+
+    cam_coords_np = np.array(cam_coords)
+
+    indices_malloc = np.full((cam_coords_np.shape[1] * 2, 3), -1, dtype=np.int32)
+    uv_mapping_malloc = np.full((cam_coords_np.shape[1] * 6, 2), -1.0, dtype=np.float32)
+
+        
+    for i in range(0, h-1):
+        for j in range(0, w-1):
+            verts = [
+                cam_coords[:, w*i+j],
+                cam_coords[:, w*(i+1)+j],
+                cam_coords[:, w*i+(j+1)],
+            ]
+            if [0,0,0] in map(list, verts):
+                continue
+
+            angle = 3.5
+            if angle > minAngle:
+                indices_malloc[append_indices_id, :] = [w*i+j, w*(i+1)+j, w*i+(j+1)]
+                append_indices_id += 1
+
+                # UV mapping
+                v1 = float(h-i)/h
+                u1 = float(j)/w
+                v2 = float(h-(i+1))/h
+                u2 = float(j)/w
+                v3 = float(h-i)/h
+                u3 = float(j+1)/w
+
+                uv_mapping_malloc[append_uv_id, :] = [u1, v1]
+                uv_mapping_malloc[append_uv_id+1, :] = [u2, v2]
+                uv_mapping_malloc[append_uv_id+2, :] = [u3, v3]
+                append_uv_id += 3
+
+            verts = [
+                cam_coords[:, w*i+(j+1)],
+                cam_coords[:, w*(i+1)+j],
+                cam_coords[:, w*(i+1)+(j+1)],
+            ]
+            if [0,0,0] in map(list, verts):
+                continue
+
+            # angle = 3.5
+            if angle > minAngle:
+                indices_malloc[append_indices_id, :] = [w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)]
+                append_indices_id += 1
+                        
+                # UV mapping
+                v1 = float(h-i)/h
+                u1 = float(j+1)/w
+                v2 = float(h-(i+1))/h
+                u2 = float(j)/w
+                v3 = float(h-(i+1))/h
+                u3 = float(j+1)/w
+
+                uv_mapping_malloc[append_uv_id, :] = [u1, v1]
+                uv_mapping_malloc[append_uv_id+1, :] = [u2, v2]
+                uv_mapping_malloc[append_uv_id+2, :] = [u3, v3]
+                append_uv_id += 3
+
+    # Remove excess entries 
+    indices_malloc_subset = indices_malloc[~np.all(indices_malloc == -1, axis=1)]
+    uv_mapping_malloc_subset = uv_mapping_malloc[~np.all(uv_mapping_malloc < 0.0, axis=1)]
+
+    return indices_malloc_subset, uv_mapping_malloc_subset
+
 
 
 class triangle_mesh_from_depth:
@@ -290,6 +373,7 @@ class triangle_mesh_from_depth:
                 fx=cameraMatrix[0,0], fy=cameraMatrix[1,1],
                 cx=cameraMatrix[0,2], cy=cameraMatrix[1,2]
             )
+        # return self.depth_to_mesh_malloc_wrap(depth_raw.astype('float32'), camera, minAngle, rotation_matrix = rotation_matrix, translation = translation)
         return self.depth_to_mesh_malloc(depth_raw.astype('float32'), camera, minAngle, rotation_matrix = rotation_matrix, translation = translation)
         # return self.depth_to_mesh(depth_raw.astype('float32'), camera, minAngle, rotation_matrix = rotation_matrix, translation = translation)
 
@@ -558,6 +642,134 @@ class triangle_mesh_from_depth:
 
         return mesh 
     
+
+
+
+    def depth_to_mesh_malloc_wrap(self, depth, camera=None, minAngle=3.0, rotation_matrix = np.eye(3), translation = np.zeros(3)):
+        # Default value for camera intrinsics
+        if camera is None:
+            camera = self.DEFAULT_CAMERA
+
+        # logger.info('Reprojecting points...')
+        K = camera.intrinsic_matrix
+        K_inv = np.linalg.inv(K)
+        pixel_coords = self._pixel_coord_np(depth.shape[1], depth.shape[0])
+        cam_coords = K_inv @ pixel_coords * depth.flatten()
+
+        rospy.logdebug("rotation matrix: {}".format(rotation_matrix))
+
+        # Rotate points based on TF information
+        cam_coords = rotation_matrix @ cam_coords
+
+        w = camera.width
+        h = camera.height
+
+        # Get triangle indices & UV map
+        indices_malloc_subset, uv_mapping_malloc_subset = depth_to_mesh_core(cam_coords=cam_coords,
+                                                                                  dimensions=[h, w],
+                                                                                  minAngle=minAngle)
+
+
+        # Translate points based on TF information
+        cam_coords[0, :] = cam_coords[0, :] + translation[0] * np.ones_like(cam_coords[0, :])
+        cam_coords[1, :] = cam_coords[1, :] + translation[1] * np.ones_like(cam_coords[1, :])
+        cam_coords[2, :] = cam_coords[2, :] + translation[2] * np.ones_like(cam_coords[2, :])
+
+        # Convert to compatible datatype 
+        indices_subset_vec = o3d.utility.Vector3iVector(indices_malloc_subset)
+        points = o3d.utility.Vector3dVector(cam_coords.transpose())
+        triangle_uv_vector = o3d.utility.Vector2dVector(uv_mapping_malloc_subset)
+        # Create mesh from points & triangle ids
+        mesh = o3d.geometry.TriangleMesh(points, indices_subset_vec)
+
+        # Place UV map into mesh instance
+        mesh.triangle_uvs = triangle_uv_vector
+
+        return mesh 
+
+
+
+    # Isolate the core loop that creates the mesh's triangles
+    # We can try to use Numba to precompile the method and maybe accelerate meshing time:
+    @jit(nopython=True)
+    def depth_to_mesh_core(self, cam_coords, dimensions, minAngle = 3.0):
+        # PARAMETERS OF THIS METHOD MUST BE DECLARED BEFOREHAND
+        # Initialize numpy arrays for memory allocation
+        # dimensions = [h, w]
+
+        h = dimensions[0]
+        w = dimensions[1]
+
+        # Array indices declaration for the allocated numpy arrays
+        append_indices_id = 0
+        append_uv_id = 0
+
+        cam_coords_np = np.array(cam_coords)
+
+        indices_malloc = np.full((cam_coords_np.shape[1] * 2, 3), -1, dtype=np.int32)
+        uv_mapping_malloc = np.full((cam_coords_np.shape[1] * 6, 2), -1.0, dtype=np.float32)
+
+        
+        for i in range(0, h-1):
+            for j in range(0, w-1):
+                verts = [
+                    cam_coords[:, w*i+j],
+                    cam_coords[:, w*(i+1)+j],
+                    cam_coords[:, w*i+(j+1)],
+                ]
+                if [0,0,0] in map(list, verts):
+                    continue
+
+                angle = 3.5
+                if angle > minAngle:
+                    indices_malloc[append_indices_id, :] = [w*i+j, w*(i+1)+j, w*i+(j+1)]
+                    append_indices_id += 1
+
+                    # UV mapping
+                    v1 = float(h-i)/h
+                    u1 = float(j)/w
+                    v2 = float(h-(i+1))/h
+                    u2 = float(j)/w
+                    v3 = float(h-i)/h
+                    u3 = float(j+1)/w
+
+                    uv_mapping_malloc[append_uv_id, :] = [u1, v1]
+                    uv_mapping_malloc[append_uv_id+1, :] = [u2, v2]
+                    uv_mapping_malloc[append_uv_id+2, :] = [u3, v3]
+                    append_uv_id += 3
+
+                verts = [
+                    cam_coords[:, w*i+(j+1)],
+                    cam_coords[:, w*(i+1)+j],
+                    cam_coords[:, w*(i+1)+(j+1)],
+                ]
+                if [0,0,0] in map(list, verts):
+                    continue
+
+                # angle = 3.5
+                if angle > minAngle:
+                    indices_malloc[append_indices_id, :] = [w*i+(j+1),w*(i+1)+j, w*(i+1)+(j+1)]
+                    append_indices_id += 1
+                        
+                    # UV mapping
+                    v1 = float(h-i)/h
+                    u1 = float(j+1)/w
+                    v2 = float(h-(i+1))/h
+                    u2 = float(j)/w
+                    v3 = float(h-(i+1))/h
+                    u3 = float(j+1)/w
+
+                    uv_mapping_malloc[append_uv_id, :] = [u1, v1]
+                    uv_mapping_malloc[append_uv_id+1, :] = [u2, v2]
+                    uv_mapping_malloc[append_uv_id+2, :] = [u3, v3]
+                    append_uv_id += 3
+
+        # Remove excess entries 
+        indices_malloc_subset = indices_malloc[~np.all(indices_malloc == -1, axis=1)]
+        uv_mapping_malloc_subset = uv_mapping_malloc[~np.all(uv_mapping_malloc < 0.0, axis=1)]
+
+        return indices_malloc_subset, uv_mapping_malloc_subset
+
 
 
 
