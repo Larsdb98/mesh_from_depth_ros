@@ -532,8 +532,7 @@ class triangle_mesh_from_depth:
                         uv_mapping_malloc[append_uv_id+1, :] = [u2, v2]
                         uv_mapping_malloc[append_uv_id+2, :] = [u3, v3]
                         append_uv_id += 3
-
-
+                    # Update tqdm progress bar 
                     pbar.update(1)
 
         # Translate points based on TF information
@@ -549,9 +548,9 @@ class triangle_mesh_from_depth:
         uv_mapping_malloc_subset = uv_mapping_malloc[~np.all(uv_mapping_malloc < 0.0, axis=1)]
         # Convert to compatible datatype 
         indices_subset_vec = o3d.utility.Vector3iVector(indices_malloc_subset)
-
         points = o3d.utility.Vector3dVector(cam_coords.transpose())
         triangle_uv_vector = o3d.utility.Vector2dVector(uv_mapping_malloc_subset)
+        # Create mesh from points & triangle ids
         mesh = o3d.geometry.TriangleMesh(points, indices_subset_vec)
 
         # Place UV map into mesh instance
