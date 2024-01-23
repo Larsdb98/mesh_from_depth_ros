@@ -13,7 +13,7 @@ import math
 import copy
 import tf
 from numba import jit
-import datetime
+import datetime 
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
 
 # NOTE: This script used the following repo to compute the mesh from depth images:
