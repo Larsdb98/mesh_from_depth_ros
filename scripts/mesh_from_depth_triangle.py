@@ -13,7 +13,7 @@ import math
 import copy
 import tf
 from numba import jit
-import datetime 
+import datetime  
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
 
 # NOTE: This script used the following repo to compute the mesh from depth images:
@@ -281,12 +281,17 @@ class triangle_mesh_from_depth:
 
     def save_mesh_as_obj(self, mesh, export_dir):
         rospy.logdebug("Exporting mesh as .obj file")
+        # How long does it take to export file ? Time with time:
+        tic = datetime.datetime.now()
         # Filename for .obj mesh file:
         obj_filename = os.path.join(export_dir, "workspace_mesh.obj")
         o3d.io.write_triangle_mesh(obj_filename, mesh, 
                                     write_ascii = True, 
                                     write_vertex_normals = False) # can't be exported into .obj files anyways
+        toc = datetime.datetime.now()
         rospy.loginfo("Mesh file successfully exported.")
+        print("Exportation time: {}".format(toc - tic)) # may want to comment this out later on
+
 
 
     def publish_success_flag(self):
