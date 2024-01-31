@@ -310,7 +310,7 @@ class triangle_mesh_from_depth:
         rgbs_image[:, :, :3] = rgb_image
 
         # Convert mask image from rgb to grayscale:
-        gray_mask = cv2.cvtColor(mask_image, cv2.COLOR_BGR2GRAY)
+        gray_mask = cv2.cvtColor(mask_image, cv2.COLOR_BGR2GRAY) # remember that semantic values of 1 get remapped to 255 (grayscale image)
         # print("Gray mask image shape: {}".format(gray_mask.shape))
 
         # Dump grayscale mask in rgbs image
@@ -378,6 +378,7 @@ class triangle_mesh_from_depth:
                 fx=cameraMatrix[0,0], fy=cameraMatrix[1,1],
                 cx=cameraMatrix[0,2], cy=cameraMatrix[1,2]
             )
+        # ACTUAL MESHING
         # return self.depth_to_mesh_malloc_wrap(depth_raw.astype('float32'), camera, minAngle, rotation_matrix = rotation_matrix, translation = translation)
         return self.depth_to_mesh_malloc(depth_raw.astype('float32'), camera, minAngle, rotation_matrix = rotation_matrix, translation = translation)
         # return self.depth_to_mesh(depth_raw.astype('float32'), camera, minAngle, rotation_matrix = rotation_matrix, translation = translation)
@@ -670,10 +671,13 @@ class triangle_mesh_from_depth:
         h = camera.height
 
         # Get triangle indices & UV map
+        tic = datetime.datetime.now()
         indices_malloc_subset, uv_mapping_malloc_subset = depth_to_mesh_core(cam_coords=cam_coords,
                                                                                   dimensions=[h, w],
                                                                                   minAngle=minAngle)
+        toc = datetime.datetime.now()
 
+        print("Elapsed time for depth image meshing: {}".format(toc - tic))
 
         # Translate points based on TF information
         cam_coords[0, :] = cam_coords[0, :] + translation[0] * np.ones_like(cam_coords[0, :])
