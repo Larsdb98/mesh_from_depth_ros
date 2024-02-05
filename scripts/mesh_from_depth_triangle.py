@@ -15,6 +15,7 @@ import tf
 from numba import jit
 import datetime  
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
+import message_filters
 
 # NOTE: This script used the following repo to compute the mesh from depth images:
 # https://github.com/hesom/depth_to_mesh/tree/master
