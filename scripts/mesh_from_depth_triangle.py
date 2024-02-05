@@ -16,6 +16,7 @@ from numba import jit
 import datetime  
 from tqdm import tqdm # Not necessary as well, but may be useful for dev and debugging
 import message_filters
+# import tf_conversions
 
 # NOTE: This script used the following repo to compute the mesh from depth images:
 # https://github.com/hesom/depth_to_mesh/tree/master
@@ -147,14 +148,61 @@ class triangle_mesh_from_depth:
         self.__camera_frame_id = rospy.get_param("~camera_frame_id", "wrist_camera_color_optical_frame")
         self.__target_frame_id = rospy.get_param("~target_frame_id", "world")
 
-        # Setting up subscribers
-        rospy.Subscriber(self.__depth_image_topic, Image, self.depth_image_callback_2)
+        # Setting up asynchronous subscriber(s) 
+        # rospy.Subscriber(self.__depth_image_topic, Image, self.depth_image_callback_2)
         rospy.Subscriber(self.__camera_intrinsics_topic, CameraInfo, self.depth_intrinsics_callback)
-        rospy.Subscriber(self.__rgb_image_topic, Image, self.rgb_image_callback)
-        rospy.Subscriber(self.__semantic_image_topic, Image, self.semantic_callback)
+        # rospy.Subscriber(self.__rgb_image_topic, Image, self.rgb_image_callback)
+        # rospy.Subscriber(self.__semantic_image_topic, Image, self.semantic_callback)
+
+
+        ################################### New message sync. & differed transformation lookup.
+
+        self.__depth_image_sub = message_filters.Subscriber(self.__depth_image_topic, Image)
+        # self.__camera_intrinsics_sub = message_filters.Subscriber(self.__camera_intrinsics_topic, CameraInfo)
+        self.__rgb_image_sub = message_filters.Subscriber(self.__rgb_image_topic, Image)
+        self.__semantic_sub = message_filters.Subscriber(self.__semantic_image_topic, Image)
+
+        self.__timeSynchronizer = message_filters.TimeSynchronizer([self.__depth_image_sub, 
+                                                                    self.__rgb_image_sub,
+                                                                    self.__semantic_sub], queue_size=100)
+        self.__timeSynchronizer.registerCallback(self.sync_callback)
+        
+        ################################### End of improvements
 
         # Setting up publishers: export flag
         self.export_success_pub = rospy.Publisher(self.__export_success_topic, Bool, queue_size=10)
+        
+
+    # Main callback function when depth, rgb, semantic images are recieved synchronized.
+    def sync_callback(self, depth_msg, rgb_image_msg, semantic_msg):
+        print("Synchronized image message triplet have been recieved !")
+        tf_rotation = None
+        tf_translation = None
+
+        try:
+            # Lookup transform at time when depth was published
+            (trans, rot) = self.tf_listener.lookupTransform(self.__target_frame_id, self.__camera_frame_id, depth_msg.header.stamp)
+            tf_rotation = np.array(self.tf_listener.fromTranslationRotation(trans, rot)[:3, :3])
+            tf_translation = np.array(trans)
+
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            rospy.logerr("Error looking up transform ! Ignoring synched frames... %s", str(e))
+            return
+
+        if tf_rotation is not None and tf_translation is not None:
+            depth_img = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
+            semantic_img = self.bridge.imgmsg_to_cv2(semantic_msg, desired_encoding="passthrough")
+            rgb_img = self.bridge.imgmsg_to_cv2(rgb_image_msg, desired_encoding="bgr8")
+
+            self.create_4ch_texture(mask_image = semantic_img, 
+                                    rgb_image=rgb_img, 
+                                    export_dir=self.__export_directory)
+            self.trigger_meshing(depth_image=depth_img,
+                                tf_rotation=tf_rotation,
+                                tf_translation=tf_translation)
+
+        else:
+            rospy.logwarn("Not enough data recieved yet ! Ignoring synched frames...")
 
 
 
@@ -243,7 +291,7 @@ class triangle_mesh_from_depth:
 
 
 
-
+    # This callback is still being used
     def depth_intrinsics_callback(self, intrinsics_msg):
         self.depth_camera_intrinsics = np.array(intrinsics_msg.K).reshape((3, 3))
 
@@ -781,8 +829,6 @@ class triangle_mesh_from_depth:
         return indices_malloc_subset, uv_mapping_malloc_subset
 
 
-
-
     # For the actual ROS looping
     def run(self):
         rospy.spin()
@@ -791,9 +837,11 @@ class triangle_mesh_from_depth:
 ###########################################################
 ###########################################################
 def main():
-    node = triangle_mesh_from_depth()
-    node.run()
-
+    try:
+        node = triangle_mesh_from_depth()
+        node.run()
+    except rospy.ROSInterruptException():
+        pass
 
 
 
