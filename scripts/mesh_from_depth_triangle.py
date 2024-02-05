@@ -191,7 +191,7 @@ class triangle_mesh_from_depth:
 
         if tf_rotation is not None and tf_translation is not None:
             depth_img = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
-            semantic_img = self.bridge.imgmsg_to_cv2(semantic_msg, desired_encoding="passthrough")
+            semantic_img = self.bridge.imgmsg_to_cv2(semantic_msg, desired_encoding="mono8")
             rgb_img = self.bridge.imgmsg_to_cv2(rgb_image_msg, desired_encoding="bgr8")
 
             self.create_4ch_texture(mask_image = semantic_img, 
@@ -359,7 +359,8 @@ class triangle_mesh_from_depth:
         rgbs_image[:, :, :3] = rgb_image
 
         # Convert mask image from rgb to grayscale:
-        gray_mask = cv2.cvtColor(mask_image, cv2.COLOR_BGR2GRAY) # remember that semantic values of 1 get remapped to 255 (grayscale image)
+        # gray_mask = cv2.cvtColor(mask_image, cv2.COLOR_BGR2GRAY) # used with old unsynched messages
+        gray_mask = mask_image
         # print("Gray mask image shape: {}".format(gray_mask.shape))
 
         # Dump grayscale mask in rgbs image
