@@ -1,6 +1,8 @@
 # Depth to Mesh ROS Package
 
-This ROS package allows to convert depth images from RGBD sensors into meshes. It uses the uniform (2D image-like) structure of depth maps for its triangulation. Degenerate triangles and triangles that are likely wrong (i.e. connecting foreground and background surfaces) are filtered out.
+ROS distro: Noetic (Ubuntu 20.04)
+
+This ROS package allows to convert depth images (sensor_msgs/Image) from RGBD sensors into meshes. It uses the uniform (2D image-like) structure of depth maps for its triangulation. Degenerate triangles and triangles that are likely wrong (i.e. connecting foreground and background surfaces) are filtered out.
 
 The meshing process uses Open3D's TriangleMesh class to export the mesh as OBJ files. Moreover, the exported OBJ files contain UV coordinates on each computed triangle. It is therefore possible to texture the exported mesh using an RGB image from the same sensor. 
 
@@ -12,7 +14,7 @@ The meshing process uses Open3D's TriangleMesh class to export the mesh as OBJ f
 ## Parameters
 
 - **~depth_image_topic** : Topic where depth images are being published
-- **~depth_intrinsics** : Topic where depth camera intrinsics are being published (depth/camera_info).
+- **~depth_intrinsics** : Topic where depth camera intrinsics are being published (sensor_msgs/CameraInfo).
 - **~rgb_image_topic** : Topic where RGB images are being published. This parameter is used to create the 4 Channel texture images.
 - **~semantic_image** : Topic where grayscale images of the same height & width as the RGB images of the previous parameter get published. These are fused with RGB images to create and export a 4 channel texture map.
 - **~export_directory** : Mesh and texture file export directory.
@@ -24,6 +26,26 @@ The meshing process uses Open3D's TriangleMesh class to export the mesh as OBJ f
 ## Example
 
 See the [demo.launch](launch/demo.launch) launchfile.
+
+## Installation
+
+1. To install, clone this repository into your catkin ```src``` folder with the following command lines:
+    ```bash
+    cd ~/catkin_ws
+    git clone git@github.com:Larsdb98/mesh_from_depth_ros.git
+    ```
+
+2. Build and source your workspace:
+    ```bash
+    cd ~/catkin_ws
+    catkin build
+    soruce devel/setup.bash
+    ```
+
+3. Launch the node:
+    ```bash
+    roslaunch mesh_from_depth demo.launch
+    ```
 
 # Credit
 
