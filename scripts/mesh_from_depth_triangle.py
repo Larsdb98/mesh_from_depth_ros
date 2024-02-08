@@ -164,7 +164,7 @@ class triangle_mesh_from_depth:
 
         self.__timeSynchronizer = message_filters.TimeSynchronizer([self.__depth_image_sub, 
                                                                     self.__rgb_image_sub,
-                                                                    self.__semantic_sub], queue_size=100)
+                                                                    self.__semantic_sub], queue_size=10)
         self.__timeSynchronizer.registerCallback(self.sync_callback)
         
         ################################### End of improvements
