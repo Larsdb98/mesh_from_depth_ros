@@ -1,5 +1,7 @@
 # Depth to Mesh ROS Package
 
+Warning: This package, although functional, is still in development.
+
 ROS distro: Noetic (Ubuntu 20.04)
 
 This ROS package allows to convert depth images (sensor_msgs/Image) from RGBD sensors into meshes. It uses the uniform (2D image-like) structure of depth maps for its triangulation. Degenerate triangles and triangles that are likely wrong (i.e. connecting foreground and background surfaces) are filtered out.
@@ -39,7 +41,7 @@ See the [demo.launch](launch/demo.launch) launchfile.
     ```bash
     cd ~/catkin_ws
     catkin build
-    soruce devel/setup.bash
+    source devel/setup.bash
     ```
 
 3. Launch the node:
